@@ -2,10 +2,12 @@ package com.phonepe.testapp;
 
 import android.app.Application;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -14,12 +16,17 @@ import androidx.lifecycle.AndroidViewModel;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleObserver;
 import androidx.lifecycle.LifecycleOwner;
+import androidx.lifecycle.LiveData;
+import androidx.lifecycle.MutableLiveData;
+import androidx.lifecycle.Observer;
 import androidx.lifecycle.OnLifecycleEvent;
 import androidx.lifecycle.ViewModel;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.lifecycle.ViewModelProviders;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+import java.util.UUID;
 
 /**
  * Created by Chethan on 2019-09-11.
@@ -82,16 +89,18 @@ public class MainFragment extends Fragment {
         public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
             if (getItemViewType(position) == 1) {
                 WidgetOneVM widgetOneVM = viewModelProvider.get(String.valueOf(position) , WidgetOneVM.class);
+                ((TestViewHolderTypeOne) holder).removeExistingData();
                 ((TestViewHolderTypeOne) holder).setVM(widgetOneVM);
             } else {
                 WidgetTwoVM widgetTwoVM = viewModelProvider.get(String.valueOf(position) , WidgetTwoVM.class);
+                ((TestViewHolderTypeTwo) holder).removeExistingData();
                 ((TestViewHolderTypeTwo) holder).setVM(widgetTwoVM);
             }
         }
 
         @Override
         public int getItemCount() {
-            return 10;
+            return 1000;
         }
 
         @Override
@@ -106,11 +115,16 @@ public class MainFragment extends Fragment {
 
     class TestViewHolderTypeOne extends RecyclerView.ViewHolder implements LifecycleObserver {
 
-        private ViewModel vm;
+        private WidgetOneVM vm;
+        private TextView textView;
+
+        private LifecycleOwner lifecycleOwner;
 
         public TestViewHolderTypeOne(@NonNull View itemView, LifecycleOwner lifecycleOwner) {
             super(itemView);
+            textView = itemView.findViewById(R.id.text);
             lifecycleOwner.getLifecycle().addObserver(this);
+            this.lifecycleOwner = lifecycleOwner;
         }
 
         @OnLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -133,19 +147,34 @@ public class MainFragment extends Fragment {
             Log.d( "zzzzzz","TestViewHolderTypeOne ON_DESTROY");
         }
 
-        private void setVM(ViewModel vm) {
+        public void removeExistingData() {
+            textView.setText("Waiting for data from VM...");
+        }
+
+        public void setVM(WidgetOneVM vm) {
             this.vm = vm;
+            this.vm.getData();
+            this.vm.observeData().observe(lifecycleOwner, new Observer<String>() {
+                @Override
+                public void onChanged(String s) {
+                    textView.setText(s);
+                }
+            });
         }
 
     }
 
     class TestViewHolderTypeTwo extends RecyclerView.ViewHolder implements LifecycleObserver {
 
-        private ViewModel vm;
+        private WidgetTwoVM vm;
+        private LifecycleOwner lifecycleOwner;
+        private TextView textView;
 
         public TestViewHolderTypeTwo(@NonNull View itemView, LifecycleOwner lifecycleOwner) {
             super(itemView);
             lifecycleOwner.getLifecycle().addObserver(this);
+            textView = itemView.findViewById(R.id.text);
+            this.lifecycleOwner = lifecycleOwner;
         }
 
         @OnLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -168,22 +197,63 @@ public class MainFragment extends Fragment {
             Log.d( "zzzzzz","TestViewHolderTypeTwo ON_DESTROY");
         }
 
+        public void removeExistingData() {
+            textView.setText("Waiting for data from VM...");
+        }
 
-
-        private void setVM(ViewModel vm) {
+        public void setVM(WidgetTwoVM vm) {
             this.vm = vm;
+            this.vm.getData();
+            this.vm.observeData().observe(lifecycleOwner, new Observer<String>() {
+                @Override
+                public void onChanged(String s) {
+                    textView.setText(s);
+                }
+            });
         }
     }
 
     public static class WidgetOneVM extends ViewModel {
 
+        // todo publish values to observer once view is recycled and check the behaviour
+
+        private MutableLiveData<String> data = new MutableLiveData();
+
         public WidgetOneVM() {
+        }
+
+        public void getData() {
+            new Handler().postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    data.postValue("From VM One " + UUID.randomUUID().toString());
+                }
+            }, 1000);
+        }
+
+        public LiveData<String> observeData() {
+            return data;
         }
     }
 
     public static class WidgetTwoVM extends ViewModel {
 
+        private MutableLiveData<String> data = new MutableLiveData();
+
         public WidgetTwoVM() {
+        }
+
+        public void getData() {
+            new Handler().postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    data.postValue("From VM Two " + UUID.randomUUID().toString());
+                }
+            }, 500);
+        }
+
+        public LiveData<String> observeData() {
+            return data;
         }
     }
 
