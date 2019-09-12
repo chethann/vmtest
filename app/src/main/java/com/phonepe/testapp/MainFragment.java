@@ -3,6 +3,7 @@ package com.phonepe.testapp;
 import android.app.Application;
 import android.os.Bundle;
 import android.os.Handler;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -90,17 +91,17 @@ public class MainFragment extends Fragment {
             if (getItemViewType(position) == 1) {
                 WidgetOneVM widgetOneVM = viewModelProvider.get(String.valueOf(position) , WidgetOneVM.class);
                 ((TestViewHolderTypeOne) holder).removeExistingData();
-                ((TestViewHolderTypeOne) holder).setVM(widgetOneVM);
+                ((TestViewHolderTypeOne) holder).setVM(widgetOneVM, position);
             } else {
                 WidgetTwoVM widgetTwoVM = viewModelProvider.get(String.valueOf(position) , WidgetTwoVM.class);
                 ((TestViewHolderTypeTwo) holder).removeExistingData();
-                ((TestViewHolderTypeTwo) holder).setVM(widgetTwoVM);
+                ((TestViewHolderTypeTwo) holder).setVM(widgetTwoVM, position);
             }
         }
 
         @Override
         public int getItemCount() {
-            return 1000;
+            return 20;
         }
 
         @Override
@@ -110,6 +111,16 @@ public class MainFragment extends Fragment {
             }
             return 2;
         }
+
+        @Override
+        public void onViewDetachedFromWindow(@NonNull RecyclerView.ViewHolder holder) {
+            super.onViewDetachedFromWindow(holder);
+            if (holder instanceof TestViewHolderTypeOne) {
+                ((TestViewHolderTypeOne) holder).stopObserving();
+            } else if (holder instanceof  TestViewHolderTypeTwo) {
+                ((TestViewHolderTypeTwo) holder).stopObserving();
+            }
+        }
     }
 
 
@@ -117,8 +128,10 @@ public class MainFragment extends Fragment {
 
         private WidgetOneVM vm;
         private TextView textView;
+        private Observer<String> observer;
 
         private LifecycleOwner lifecycleOwner;
+        private int pos;
 
         public TestViewHolderTypeOne(@NonNull View itemView, LifecycleOwner lifecycleOwner) {
             super(itemView);
@@ -151,15 +164,27 @@ public class MainFragment extends Fragment {
             textView.setText("Waiting for data from VM...");
         }
 
-        public void setVM(WidgetOneVM vm) {
+        public void setVM(WidgetOneVM vm, final int position) {
+            this.pos = position;
             this.vm = vm;
             this.vm.getData();
-            this.vm.observeData().observe(lifecycleOwner, new Observer<String>() {
+
+            observer = new Observer<String>() {
                 @Override
                 public void onChanged(String s) {
-                    textView.setText(s);
+                    Log.d( "zzzzzz","Data changed at " + position);
+                    textView.setText(s + " at pos " + position);
                 }
-            });
+            };
+
+            this.vm.observeData().observe(lifecycleOwner, observer);
+        }
+
+        public void stopObserving() {
+            if (this.observer != null) {
+                this.vm.data.removeObserver(this.observer);
+                Log.d( "zzzzzz","Removed observer at " + pos);
+            }
         }
 
     }
@@ -169,6 +194,8 @@ public class MainFragment extends Fragment {
         private WidgetTwoVM vm;
         private LifecycleOwner lifecycleOwner;
         private TextView textView;
+        private Observer<String> observer;
+        private int pos;
 
         public TestViewHolderTypeTwo(@NonNull View itemView, LifecycleOwner lifecycleOwner) {
             super(itemView);
@@ -201,15 +228,27 @@ public class MainFragment extends Fragment {
             textView.setText("Waiting for data from VM...");
         }
 
-        public void setVM(WidgetTwoVM vm) {
+        public void setVM(WidgetTwoVM vm, final int position) {
             this.vm = vm;
             this.vm.getData();
-            this.vm.observeData().observe(lifecycleOwner, new Observer<String>() {
+            pos = position;
+
+            observer = new Observer<String>() {
                 @Override
                 public void onChanged(String s) {
-                    textView.setText(s);
+                    Log.d( "zzzzzz","Data changed at " + position);
+                    textView.setText(s + " at pos " + position);
                 }
-            });
+            };
+
+            this.vm.observeData().observe(lifecycleOwner, observer);
+        }
+
+        public void stopObserving() {
+            if (this.observer != null) {
+                this.vm.data.removeObserver(this.observer);
+                Log.d( "zzzzzz","Removed observer at " + pos);
+            }
         }
     }
 
@@ -218,17 +257,28 @@ public class MainFragment extends Fragment {
         // todo publish values to observer once view is recycled and check the behaviour
 
         private MutableLiveData<String> data = new MutableLiveData();
+        private String uuid;
 
         public WidgetOneVM() {
         }
 
         public void getData() {
-            new Handler().postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    data.postValue("From VM One " + UUID.randomUUID().toString());
-                }
-            }, 1000);
+            if (TextUtils.isEmpty(uuid)) {
+                new Handler().postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        uuid = UUID.randomUUID().toString();
+                        data.postValue("From VM One " + uuid);
+                    }
+                }, 1000);
+            } else {
+                new Handler().postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        data.postValue("From VM One Memory " + uuid);
+                    }
+                }, 20000);
+            }
         }
 
         public LiveData<String> observeData() {
@@ -239,17 +289,28 @@ public class MainFragment extends Fragment {
     public static class WidgetTwoVM extends ViewModel {
 
         private MutableLiveData<String> data = new MutableLiveData();
+        private String uuid;
 
         public WidgetTwoVM() {
         }
 
         public void getData() {
-            new Handler().postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    data.postValue("From VM Two " + UUID.randomUUID().toString());
-                }
-            }, 500);
+            if (TextUtils.isEmpty(uuid)) {
+                new Handler().postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        uuid = UUID.randomUUID().toString();
+                        data.postValue("From VM Two " + uuid);
+                    }
+                }, 1000);
+            } else {
+                new Handler().postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        data.postValue("From VM Two Memory " + uuid);
+                    }
+                }, 20000);
+            }
         }
 
         public LiveData<String> observeData() {
